@@ -4,6 +4,9 @@
 *.so
 *.dylib
 
+# Database with image cache
+*.sqlite3
+
 # Test binary, build with `go test -c`
 *.test
 
