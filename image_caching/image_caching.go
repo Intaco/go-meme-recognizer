@@ -1,61 +1,85 @@
 package image_caching
 
-/*пакет кеширования
-интерфейс:
-функция получает картинку
-в отдельной go подпрограмме
-	находит хеш файла - понятно
-	ищет в базе данных этот хеш
-	если находит - возвращает описание картинки
-	иначе обращается к другому модулю, который обращается к Google распознаванию картинок
-	возвращает
- */
-
 import (
 	"crypto/sha256"
-	"unsafe" //ради самопальной реализации union
 	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
-	//Надеюсь, скоро. https://github.com/mattn/go-sqlite3/blob/master/_example/simple/simple.go
+	"errors"
 	"fmt"
+	_ "github.com/mattn/go-sqlite3"
+	"log"
+	"sync"
 )
 
-//глобальная переменная -- ссылка на базу данных? (https://habrahabr.ru/post/332122/)
-/*при инициализации и открытии файла надо выполнить создание базы
-CREATE TABLE IF NOT EXISTS list_of_memes(
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    hash_id INTEGER,
-    meme_name TEXT,
-    link_to_mempedia TEXT
-);
- */
+var db *sql.DB      //глобальная переменная соединения с базой данных
+var mu sync.RWMutex //sqlite3 блокируется при записи, и если попытаться записать во время блокировки -
+// поток выполнения будет прерван
 
+//вычисление хеша фотографии, неимпортируемая
+func get_id(data []uint8) string {
+	hash_sum := sha256.Sum256(data)    //найдём хеш сумму файла
+	return fmt.Sprintf("%x", hash_sum) //вернём строку в 16 значном формате
+}
 
-func get_image_name(data []uint8) (string, string) { //передаётся указатель на область памяти без копирования массива
-	hash_sum := sha256.Sum256([]byte("hello world\n")) //найдём хеш сумму файла
-	//возьмём только первые 8 байт из 32-х, чтоб влезло в uint64, который совместим с числом в базе данных
-	hash_id := *(*uint64)(unsafe.Pointer(&hash_sum))
-	fmt.Printf("hash sum = %x, hash id = %x\n", hash_sum, hash_id)
-	//запрашиваем из базы данных имя мема и ссылку на мемопедию
-	name, link, err := get_from_database(hash_id)
+//создание базы данных,
+//принимает путь до файла sqlite
+func InitDb(path string) error {
+	var err error // если использовать := то создастся локальная переменная db
+	db, err = sql.Open("sqlite3", path)
 	if err != nil {
-		name, _ := get_from_google_api() //не этот модуль
-		link, _ := get_from_memopedia() //не этот модуль
-		go insert_to_database(name, link)
+		log.Fatal(err)
+		return err
 	}
-	return name, link
+	sqlStmt := `
+	create table if not exists list_of_memes(
+		id integer not null primary key autoincrement,
+		hash_id text,
+		meme_name text,
+		link_to_mempedia text
+	);`
+	_, err = db.Exec(sqlStmt)
+	if err != nil {
+		log.Printf("%q: %s\n", err, sqlStmt)
+		return err
+	}
+	return err
 }
 
-func get_from_database(hash_id uint64) (string, string, error){
-	var name, link string
-	var err error
-	/*SELECT meme_name, link_to_mempedia FROM list_of_memes
-    WHERE hash_id = ?;*/
-	return name, link, err
+//вставляет новую картинку в базу данных по хешу.
+//на каждое добавление создаётся новая транзакция
+//должно быть потокобезопасно, так как sqlite окружает rw mutex
+//чертовски медленно на запись - 6 вызовов/секунда
+func Insert_to_database(data []uint8, name, link string) error {
+	mu.Lock()
+	defer mu.Unlock()
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	stmt, err := tx.Prepare("INSERT INTO list_of_memes (hash_id, meme_name, link_to_mempedia) VALUES (?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(get_id(data), name, link)
+	if err != nil {
+		log.Fatal(err)
+	}
+	tx.Commit()
+	return nil
 }
 
-func insert_to_database(name, link string){
-	/*INSERT INTO list_of_memes
-	(hash_id, meme_name, link_to_mempedia)
-	VALUES(?, ?, ?);*/
+//пытаемся просто вытащить строки
+func Select_from_database(data []byte) (string, string, error) {
+	row := db.QueryRow("SELECT meme_name, link_to_mempedia FROM list_of_memes WHERE hash_id = $1",
+		get_id(data))
+	var meme_name, link_to_mempedia string
+	err := row.Scan(&meme_name, &link_to_mempedia)
+	if err != nil {
+		return meme_name, link_to_mempedia, errors.New("no in the database")
+	}
+	return meme_name, link_to_mempedia, nil
+}
+
+func ClouseDb() {
+	db.Close()
 }
