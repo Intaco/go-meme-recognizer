@@ -1,7 +1,6 @@
-package main
+package watcher
 
 import (
-	"fmt"
 	"log"
 	"os"
 )

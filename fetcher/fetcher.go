@@ -13,8 +13,6 @@ import (
 	"time"
 )
 
-var package_logger = log.New(os.Stderr, "", 0)
-
 var (
 	ErrJobTimedOut        = errors.New("job request timed out")
 	ErrConflictingDirName = errors.New("file named as provided dir name exist")
@@ -91,30 +89,20 @@ func (p *Pool) Exec(e Task) {
 type DownloadTask struct {
 	query              DownloadQuery
 	download_wait_time int
-	logger             *log.Logger
 }
 
 func NewDownloadTask(query DownloadQuery, download_wait_time int,
 	verbose int) (t *DownloadTask) {
-	t = new(DownloadTask)
-	t.query = query
-	t.download_wait_time = download_wait_time
-	if verbose > 0 {
-		t.logger = log.New(os.Stderr, "DownloadTask: ", 0)
-	}
+	t = &DownloadTask{query, DEFAULT_POOL_TASK_CHANEL_SIZE}
 	return
 }
 
 func (t *DownloadTask) download() (err error) {
-	if t.logger != nil {
-		t.logger.Printf("Started downloading %s\n\tto %s\n", t.query.url, t.query.getFilePath())
-	}
+	log.Printf("Started downloading %s\n\tto %s\n", t.query.url, t.query.GetFilePath())
 
-	fd, err := t.query.Prepare()
+	fd, err := t.query.prepare()
 	if err != nil {
-		if t.logger != nil {
-			t.logger.Println(err)
-		}
+		log.Println(err)
 		return
 	}
 
@@ -123,25 +111,19 @@ func (t *DownloadTask) download() (err error) {
 
 	response, err := client.Get(t.query.url)
 	if err != nil {
-		if t.logger != nil {
-			t.logger.Println(err)
-		}
+		log.Println(err)
 		return
 	}
 	defer response.Body.Close()
 
 	_, err = io.Copy(fd, response.Body)
 	if err != nil {
-		if t.logger != nil {
-			t.logger.Println(err)
-		}
+		log.Println(err)
 		return
 	}
 
-	if t.logger != nil {
-		t.logger.Printf("Finished downloading %s\n\t%s\n", t.query.url,
-			t.query.getFilePath())
-	}
+	log.Printf("Finished downloading %s\n\t%s\n", t.query.url,
+		t.query.GetFilePath())
 	t.query.markAsDone()
 	return
 }
@@ -163,7 +145,7 @@ func NewDownloadQuery(url string, dirPath string,
 	return DownloadQuery{url, dirPath, filename, false}
 }
 
-func (q *DownloadQuery) getFilePath() (filePath string) {
+func (q *DownloadQuery) GetFilePath() (filePath string) {
 	filePath = filepath.Join(q.dirPath, q.filename)
 	return
 }
@@ -176,14 +158,14 @@ func (q *DownloadQuery) markAsDone() {
 	q.isDone = true
 }
 
-func (q *DownloadQuery) Prepare() (fd *os.File, err error) {
+func (q *DownloadQuery) prepare() (fd *os.File, err error) {
 	if err = os.MkdirAll(q.dirPath, 0777); err != nil {
-		package_logger.Println(err)
+		log.Println(err)
 		return
 	}
-	filePath := q.getFilePath()
+	filePath := q.GetFilePath()
 	if fd, err = os.Create(filePath); err != nil {
-		package_logger.Println(err)
+		log.Println(err)
 		return
 	}
 
@@ -200,7 +182,7 @@ func NewFetcher(concurrency int, wait_time int) (f *Fetcher) {
 	return
 }
 
-func (f *Fetcher) download(downloads []DownloadQuery, startIndex int) {
+func (f *Fetcher) Download(downloads []DownloadQuery, startIndex int) {
 	pool := NewPool(f.concurrency)
 	for _, query := range downloads {
 		pool.Exec(NewDownloadTask(query,
@@ -210,7 +192,7 @@ func (f *Fetcher) download(downloads []DownloadQuery, startIndex int) {
 	pool.Wait()
 }
 
-func makeQueryFromUrlsList(rootdir string, urlsList [][]string) (downloads []DownloadQuery) {
+func MakeQueryFromUrlsList(rootdir string, urlsList [][]string) (downloads []DownloadQuery) {
 	for index1, urls := range urlsList {
 		prefix := strconv.Itoa(index1)
 		dirPath := filepath.Join(rootdir, prefix)
