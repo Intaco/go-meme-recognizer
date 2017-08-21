@@ -12,3 +12,6 @@
 
 *.iml
 .idea/
+
+# Do not commit tokens
+*.token
