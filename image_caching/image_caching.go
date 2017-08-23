@@ -29,12 +29,15 @@ func InitDb(path string) error {
 		log.Fatal(err)
 		return err
 	}
+	//index
 	sqlStmt := `
 	create table if not exists list_of_memes(
-		id integer not null primary key autoincrement,
-		hash_id text,
+		hash_id text primary key,
 		meme_name text,
-		link_to_mempedia text
+		link_to_mempedia text);
+	create table if not exists name_and_id(
+		meme_name text primary key,
+		links_to_similar text
 	);`
 	_, err = db.Exec(sqlStmt)
 	if err != nil {
@@ -48,7 +51,7 @@ func InitDb(path string) error {
 //на каждое добавление создаётся новая транзакция
 //должно быть потокобезопасно, так как sqlite окружает rw mutex
 //чертовски медленно на запись - 6 вызовов/секунда
-func Insert_to_database(data []uint8, name, link string) error {
+func Insert_to_cash(data []uint8, name, link string) error {
 	mu.Lock()
 	defer mu.Unlock()
 	tx, err := db.Begin()
@@ -69,7 +72,7 @@ func Insert_to_database(data []uint8, name, link string) error {
 }
 
 //пытаемся просто вытащить строки
-func Select_from_database(data []byte) (string, string, error) {
+func Select_from_cash(data []byte) (string, string, error) {
 	row := db.QueryRow("SELECT meme_name, link_to_mempedia FROM list_of_memes WHERE hash_id = $1",
 		get_id(data))
 	var meme_name, link_to_mempedia string
@@ -78,6 +81,37 @@ func Select_from_database(data []byte) (string, string, error) {
 		return meme_name, link_to_mempedia, errors.New("no in the database")
 	}
 	return meme_name, link_to_mempedia, nil
+}
+
+func Insert_id(name, link string) error {
+	mu.Lock()
+	defer mu.Unlock()
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	stmt, err := tx.Prepare("INSERT INTO name_and_id (meme_name, links_to_similar) VALUES (?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	_, err = stmt.Exec(name, link)
+	if err != nil {
+		return err
+	}
+	tx.Commit()
+	return nil
+}
+
+func Select_id_by_name(name string)(string, error)  {
+	row := db.QueryRow("SELECT links_to_similar FROM name_and_id WHERE meme_name = ?",
+		name)
+	var link_to_similar string
+	err := row.Scan(&link_to_similar)
+	if err != nil {
+		return "", errors.New("no in the database")
+	}
+	return link_to_similar, nil
 }
 
 func ClouseDb() {
