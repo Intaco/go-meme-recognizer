@@ -1,6 +1,7 @@
 package fetcher
 
 import (
+	"go-meme-recognizer/pool"
 	"io"
 	"log"
 	"net/http"
@@ -8,81 +9,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
-
-// Task interface that requires Execute() method
-type Task interface {
-	Execute()
-}
-
-// Pool pool
-type Pool struct {
-	mu    sync.Mutex
-	size  int
-	tasks chan Task
-	kill  chan struct{}
-	wg    sync.WaitGroup
-}
-
-// DefaultPoolTaskChannelSize default size of pool
-const DefaultPoolTaskChannelSize = 128
-
-// NewPool create new pool of given size
-func NewPool(size int) *Pool {
-	pool := &Pool{
-		tasks: make(chan Task, DefaultPoolTaskChannelSize),
-		kill:  make(chan struct{}),
-	}
-	pool.Resize(size)
-	return pool
-}
-
-func (p *Pool) worker() {
-	defer p.wg.Done()
-	for {
-		select {
-		case task, ok := <-p.tasks:
-			if !ok { // if chanel is closed, die
-				return
-			}
-			task.Execute()
-		case <-p.kill: // it's time to die!
-			return
-		}
-	}
-}
-
-// Resize resize pool to specified size
-func (p *Pool) Resize(n int) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	for p.size < n {
-		p.size++
-		p.wg.Add(1)
-		go p.worker()
-	}
-	for p.size > n {
-		p.size--
-		p.kill <- struct{}{}
-	}
-}
-
-// Close close pool
-func (p *Pool) Close() {
-	close(p.tasks)
-}
-
-// Wait wait for all tasks in pool
-func (p *Pool) Wait() {
-	p.wg.Wait()
-}
-
-// Exec schedule Task for execution
-func (p *Pool) Exec(e Task) {
-	p.tasks <- e
-}
 
 // DownloadTask represents download task for fetcher
 type DownloadTask struct {
@@ -93,7 +21,7 @@ type DownloadTask struct {
 // NewDownloadTask create download task
 func NewDownloadTask(query DownloadQuery, downloadWaitTime int,
 	verbose int) (t *DownloadTask) {
-	t = &DownloadTask{query, DefaultPoolTaskChannelSize}
+	t = &DownloadTask{query, downloadWaitTime}
 	return
 }
 
@@ -180,7 +108,7 @@ func (q *DownloadQuery) prepare() (fd *os.File, err error) {
 // Fetcher fetch download queries
 type Fetcher struct {
 	concurrency int
-	waitTime    int
+	wait_time   int
 }
 
 // NewFetcher create new fetcher
@@ -191,16 +119,16 @@ func NewFetcher(concurrency int, waitTime int) (f *Fetcher) {
 
 // Download execute download queries. Start from startIndex-th query
 func (f *Fetcher) Download(downloads []DownloadQuery, startIndex int) {
-	pool := NewPool(f.concurrency)
+	p := pool.NewPool(f.concurrency)
 	for _, query := range downloads {
-		pool.Exec(NewDownloadTask(query,
+		p.Exec(NewDownloadTask(query,
 			f.waitTime, 1))
 	}
-	pool.Close()
-	pool.Wait()
+	p.Close()
+	p.Wait()
 }
 
-// MakeQueryFromUrlsList make DownloadQueries from urls
+// Download execute download queries. Start from startIndex-th query
 func MakeQueryFromUrlsList(rootdir string, urlsList [][]string) (downloads []DownloadQuery) {
 	for index1, urls := range urlsList {
 		prefix := strconv.Itoa(index1)
