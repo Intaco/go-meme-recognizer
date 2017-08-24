@@ -1,23 +1,40 @@
 package main
 
 import (
-	"go-meme-recognizer/fetcher"
+	"log"
+	"os"
+
+	"./search"
+	"github.com/abogovski/Go-TelegramBotAPI/tgbot"
 )
 
+const queriesChannelSize = 1024
+const processedQueriesChannelSize = 1024
+
+var stop int32
+
 func main() {
-	f := fetcher.NewFetcher(10, 10)
-	urlsList := [][]string{[]string{"https://pp.userapi.com/c841030/v841030005/1826e/Bunv2Om-uv4.jpg"},
-		[]string{"https://pp.userapi.com/c638221/v638221662/81171/lLsKjoP3s_E.jpg",
-			"https://pp.userapi.com/c638221/v638221602/55c39/TQnoSaS1eVI.jpg",
-			"https://pp.userapi.com/c638221/v638221602/55c41/nOmwuC6O2mA.jpg",
-			"https://pp.userapi.com/c638221/v638221602/55c48/g0J54ofxdyY.jpg",
-			"https://pp.userapi.com/c638221/v638221602/55c4f/HAipw-io3uY.jpg"},
-		[]string{"https://pp.userapi.com/c638221/v638221007/58c3c/9A0Tz4d06bc.jpg"},
-		[]string{"https://pp.userapi.com/c638221/v638221007/58c32/nuAr6pMJGhs.jpg"},
-		[]string{"https://pp.userapi.com/c638221/v638221007/58c04/KMyDz0wwDIc.jpg"},
-		[]string{"https://pp.userapi.com/c638221/v638221388/5f8a1/_y7dUsi15b8.jpg"},
-		[]string{"https://pp.userapi.com/c837731/v837731337/55cb3/yAsTav_Ap8A.jpg"},
-		[]string{"https://pp.userapi.com/c837731/v837731869/5a3ce/0C9xZypRHRo.jpg"}}
-	queries := fetcher.MakeQueryFromUrlsList("result", urlsList)
-	f.Download(queries, 1)
+	queriesChan := make(chan search.Query, queriesChannelSize)
+	processedQueriesChan := make(chan search.ProcessedQuery, processedQueriesChannelSize)
+
+	// start queries polling from telegram
+	APIURL, err := tgbot.LoadBotAPIURL("tgbot.token")
+	if err != nil {
+		log.Fatalln(err)
+		os.Exit(1)
+	}
+	var offset tgbot.Integer
+	go PollTgBotQueries(APIURL, offset, queriesChan, &stop)
+
+	// start telegram message dispatcher
+	go DispatchTgBotResults(APIURL, processedQueriesChan)
+
+	// start search engine that:
+	// 1. listens queriesChan
+	// 2. processes queries
+	// 3. put processedQueries to processedQueriesChan
+	// 4. when queriesChannel is closed (and there're no more unprocessed queries) return
+	search.Start(queriesChan, processedQueriesChan)
+
+	return
 }
