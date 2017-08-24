@@ -18,3 +18,6 @@
 
 # Do not commit tokens
 *.token
+
+# Ignore config
+/config.json

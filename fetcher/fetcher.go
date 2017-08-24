@@ -180,7 +180,7 @@ func (q *DownloadQuery) prepare() (fd *os.File, err error) {
 // Fetcher fetch download queries
 type Fetcher struct {
 	concurrency int
-	waitTime    int
+	wait_time   int
 }
 
 // NewFetcher create new fetcher
