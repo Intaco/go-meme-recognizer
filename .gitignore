@@ -15,3 +15,9 @@
 
 *.iml
 .idea/
+
+# Do not commit tokens
+*.token
+
+# Ignore config
+/config.json

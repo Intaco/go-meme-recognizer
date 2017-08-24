@@ -1,7 +1,6 @@
 package fetcher
 
 import (
-	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -13,19 +12,12 @@ import (
 	"time"
 )
 
-var (
-	ErrJobTimedOut        = errors.New("job request timed out")
-	ErrConflictingDirName = errors.New("file named as provided dir name exist")
-)
-
-type Pull struct {
-	concurrency int
-}
-
+// Task interface that requires Execute() method
 type Task interface {
 	Execute()
 }
 
+// Pool pool
 type Pool struct {
 	mu    sync.Mutex
 	size  int
@@ -34,11 +26,13 @@ type Pool struct {
 	wg    sync.WaitGroup
 }
 
-const DEFAULT_POOL_TASK_CHANEL_SIZE = 128
+// DefaultPoolTaskChannelSize default size of pool
+const DefaultPoolTaskChannelSize = 128
 
+// NewPool create new pool of given size
 func NewPool(size int) *Pool {
 	pool := &Pool{
-		tasks: make(chan Task, DEFAULT_POOL_TASK_CHANEL_SIZE),
+		tasks: make(chan Task, DefaultPoolTaskChannelSize),
 		kill:  make(chan struct{}),
 	}
 	pool.Resize(size)
@@ -60,6 +54,7 @@ func (p *Pool) worker() {
 	}
 }
 
+// Resize resize pool to specified size
 func (p *Pool) Resize(n int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -74,26 +69,31 @@ func (p *Pool) Resize(n int) {
 	}
 }
 
+// Close close pool
 func (p *Pool) Close() {
 	close(p.tasks)
 }
 
+// Wait wait for all tasks in pool
 func (p *Pool) Wait() {
 	p.wg.Wait()
 }
 
+// Exec schedule Task for execution
 func (p *Pool) Exec(e Task) {
 	p.tasks <- e
 }
 
+// DownloadTask represents download task for fetcher
 type DownloadTask struct {
-	query              DownloadQuery
-	download_wait_time int
+	query            DownloadQuery
+	downloadWaitTime int
 }
 
-func NewDownloadTask(query DownloadQuery, download_wait_time int,
+// NewDownloadTask create download task
+func NewDownloadTask(query DownloadQuery, downloadWaitTime int,
 	verbose int) (t *DownloadTask) {
-	t = &DownloadTask{query, DEFAULT_POOL_TASK_CHANEL_SIZE}
+	t = &DownloadTask{query, DefaultPoolTaskChannelSize}
 	return
 }
 
@@ -106,7 +106,7 @@ func (t *DownloadTask) download() (err error) {
 		return
 	}
 
-	timeout := time.Duration(t.download_wait_time) * time.Second
+	timeout := time.Duration(t.downloadWaitTime) * time.Second
 	client := http.Client{Timeout: timeout}
 
 	response, err := client.Get(t.query.url)
@@ -128,10 +128,12 @@ func (t *DownloadTask) download() (err error) {
 	return
 }
 
+// Execute perform DownloadTask
 func (t DownloadTask) Execute() {
 	t.download()
 }
 
+// DownloadQuery query downloads
 type DownloadQuery struct {
 	url      string
 	dirPath  string
@@ -139,17 +141,20 @@ type DownloadQuery struct {
 	isDone   bool
 }
 
+// NewDownloadQuery create download query
 func NewDownloadQuery(url string, dirPath string,
 	filename string) DownloadQuery {
 
 	return DownloadQuery{url, dirPath, filename, false}
 }
 
+// GetFilePath get query target filepath
 func (q *DownloadQuery) GetFilePath() (filePath string) {
 	filePath = filepath.Join(q.dirPath, q.filename)
 	return
 }
 
+// IsDone is query done
 func (q *DownloadQuery) IsDone() bool {
 	return q.isDone
 }
@@ -172,26 +177,30 @@ func (q *DownloadQuery) prepare() (fd *os.File, err error) {
 	return
 }
 
+// Fetcher fetch download queries
 type Fetcher struct {
 	concurrency int
 	wait_time   int
 }
 
-func NewFetcher(concurrency int, wait_time int) (f *Fetcher) {
-	f = &Fetcher{concurrency, wait_time}
+// NewFetcher create new fetcher
+func NewFetcher(concurrency int, waitTime int) (f *Fetcher) {
+	f = &Fetcher{concurrency, waitTime}
 	return
 }
 
+// Download execute download queries. Start from startIndex-th query
 func (f *Fetcher) Download(downloads []DownloadQuery, startIndex int) {
-	pool := NewPool(f.concurrency)
+	p := pool.NewPool(f.concurrency)
 	for _, query := range downloads {
 		pool.Exec(NewDownloadTask(query,
-			f.wait_time, 1))
+			f.waitTime, 1))
 	}
-	pool.Close()
-	pool.Wait()
+	p.Close()
+	p.Wait()
 }
 
+// MakeQueryFromUrlsList make DownloadQueries from urls
 func MakeQueryFromUrlsList(rootdir string, urlsList [][]string) (downloads []DownloadQuery) {
 	for index1, urls := range urlsList {
 		prefix := strconv.Itoa(index1)
@@ -204,23 +213,3 @@ func MakeQueryFromUrlsList(rootdir string, urlsList [][]string) (downloads []Dow
 	}
 	return
 }
-
-/*
-func main() {
-	fetcher := NewFetcher(10, 10)
-	urlsList := [][]string{[]string{"https://pp.userapi.com/c841030/v841030005/1826e/Bunv2Om-uv4.jpg"},
-		[]string{"https://pp.userapi.com/c638221/v638221662/81171/lLsKjoP3s_E.jpg",
-			"https://pp.userapi.com/c638221/v638221602/55c39/TQnoSaS1eVI.jpg",
-			"https://pp.userapi.com/c638221/v638221602/55c41/nOmwuC6O2mA.jpg",
-			"https://pp.userapi.com/c638221/v638221602/55c48/g0J54ofxdyY.jpg",
-			"https://pp.userapi.com/c638221/v638221602/55c4f/HAipw-io3uY.jpg"},
-		[]string{"https://pp.userapi.com/c638221/v638221007/58c3c/9A0Tz4d06bc.jpg"},
-		[]string{"https://pp.userapi.com/c638221/v638221007/58c32/nuAr6pMJGhs.jpg"},
-		[]string{"https://pp.userapi.com/c638221/v638221007/58c04/KMyDz0wwDIc.jpg"},
-		[]string{"https://pp.userapi.com/c638221/v638221388/5f8a1/_y7dUsi15b8.jpg"},
-		[]string{"https://pp.userapi.com/c837731/v837731337/55cb3/yAsTav_Ap8A.jpg"},
-		[]string{"https://pp.userapi.com/c837731/v837731869/5a3ce/0C9xZypRHRo.jpg"}}
-	queries := makeQueryFromUrlsList("result", urlsList)
-	fetcher.download(queries, 1)
-}
-*/
