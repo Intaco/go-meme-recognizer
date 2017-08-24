@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+	"log"
 )
 
 const VK_APP_TIMEOUT uint = 10
@@ -37,7 +38,7 @@ func NewVkWatcher(app_id int, client_secret string, aim_id int) *VkWatcher {
 
 func (w *VkWatcher) initAccessToken() {
 	w.access_token = "0b463c42b423164cc496ea925b51ec75de2b474a47344da8c468eade696249c2d711bf5bcba36bdc84428"
-	// fuck all creators and maintainers of vk, expecially person(s) taking care about dev manual
+	// fuck all creators and maintainers of vk, especially person(s) taking care about dev manual
 }
 
 func (w *VkWatcher) makeVkWallRequest(count int, offset int) (response []byte, err error) {
@@ -50,7 +51,7 @@ func (w *VkWatcher) makeVkWallRequest(count int, offset int) (response []byte, e
 			"filter":   {"owner"},
 			"offset":   {strconv.Itoa(offset)}})
 	if err != nil {
-		APP_LOGGER.Println(err)
+		log.Println(err)
 		return
 	}
 	response, err = ioutil.ReadAll(resp.Body)
@@ -61,12 +62,13 @@ func (w *VkWatcher) responseToPosts(response []byte) (posts []vkPost, err error)
 	var p vkResponse
 	err = json.Unmarshal(response, &p)
 	if err != nil {
-		APP_LOGGER.Println(err)
+		log.Println(err)
 		return
 	}
 	for _, raw_post := range p.Response[1:] {
 		post, err := w.rawJsonToPost(raw_post)
 		if err != nil {
+			log.Println(err)
 			continue
 		}
 		posts = append(posts, post)
@@ -77,7 +79,7 @@ func (w *VkWatcher) responseToPosts(response []byte) (posts []vkPost, err error)
 func (w *VkWatcher) rawJsonToPost(rawPost []byte) (post vkPost, err error) {
 	err = json.Unmarshal(rawPost, &post)
 	if err != nil {
-		APP_LOGGER.Println(err)
+		log.Println(err)
 		return
 	}
 	return
@@ -86,12 +88,12 @@ func (w *VkWatcher) rawJsonToPost(rawPost []byte) (post vkPost, err error) {
 func (w *VkWatcher) getPostsChunk(count int, offset int) (posts []vkPost, err error) {
 	response, err := w.makeVkWallRequest(count, offset)
 	if err != nil {
-		APP_LOGGER.Println(err)
+		log.Println(err)
 		return
 	}
 	posts, err = w.responseToPosts(response)
 	if err != nil {
-		APP_LOGGER.Println(err)
+		log.Println(err)
 		return
 	}
 	return
