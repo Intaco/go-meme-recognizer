@@ -2,44 +2,39 @@ package googlecse
 
 import (
 	"encoding/json"
-	"os"
 	"net/url"
 	"log"
 	"net/http"
 	"io/ioutil"
 )
 
-var config *CFG = loadCfg()
+var config CFG = loadCfg()
 
-func GetConfig() *CFG {
+func GetConfig() CFG {
 	return config
 }
-
+type configSource struct {
+	CFG CFG `json:"GoogleCSE"`
+}
 type CFG struct {
 	Cx  string
 	Key string
 }
 
-func loadCfg() *CFG {
-	file, _ := os.Open("config.json")
-	defer file.Close()
-	decoder := json.NewDecoder(file)
-	configuration := CFG{}
-	m := map[string]*json.RawMessage{}
-	err := decoder.Decode(&m)
+func loadCfg() CFG {
+	bytes, err := ioutil.ReadFile("config.json")
 	if err != nil {
-		log.Fatalf("Failed to decode config! Error: %s", err)
-		return nil
+		log.Fatalf("Failed to read config.json! Error: %s", err)
 	}
-	//TODO unmarshall to struct
-	err = json.Unmarshal(*m["GoogleCSE"], &configuration)
+	configuration := new(configSource)
+
+	err = json.Unmarshal(bytes,configuration)
 
 	if err != nil {
 		log.Fatalf("Failed to unmarshall json! Error: %s", err)
-		return nil
 	}
 
-	return &configuration
+	return configuration.CFG
 }
 
 
@@ -71,7 +66,6 @@ func SearchSimilarByUrl(imageURL string) ([]CSAMemeDesc, error) {
 	q.Add("alt", "json")
 	q.Add("q", iu.String())
 	u.RawQuery = q.Encode()
-	println(u.String())
 	res, err := http.Get(u.String())
 	if err != nil {
 		log.Fatalf("Failed to proceed request to google CSE! Error: %s code", err)
