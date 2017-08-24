@@ -1,8 +1,6 @@
 package fetcher
 
-import "testing"
-
-func Test(t *testing.T) {
+func Example_test() {
 	f := NewFetcher(10, 10)
 	urlsList := [][]string{[]string{"https://pp.userapi.com/c841030/v841030005/1826e/Bunv2Om-uv4.jpg"},
 		[]string{"https://pp.userapi.com/c638221/v638221662/81171/lLsKjoP3s_E.jpg",
