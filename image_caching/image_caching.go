@@ -8,6 +8,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"log"
 	"sync"
+	"net/http"
 )
 
 var db *sql.DB      //глобальная переменная соединения с базой данных
@@ -71,8 +72,18 @@ func Insert_to_cash(data []uint8, name, link string) error {
 	return nil
 }
 
+//скачиваем картинку и ищем по ней в кеше
+func Select_from_cash(link string) (string, string, error) {
+	response, _ := http.Get(link)
+	defer response.Body.Close()
+	var img_as_bytes []byte
+	response.Body.Read(img_as_bytes)
+	meme_name, link_to_mempedia, err := Select_from_cash_by_image(img_as_bytes)
+	return meme_name, link_to_mempedia, err
+}
+
 //пытаемся просто вытащить строки
-func Select_from_cash(data []byte) (string, string, error) {
+func Select_from_cash_by_image(data []byte) (string, string, error) {
 	row := db.QueryRow("SELECT meme_name, link_to_mempedia FROM list_of_memes WHERE hash_id = $1",
 		get_id(data))
 	var meme_name, link_to_mempedia string

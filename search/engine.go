@@ -14,12 +14,22 @@ func Start(queriesChan <-chan Query, processedQueriesChan chan<- ProcessedQuery)
 		//передаём запрос
 		go func(q Query) {
 			if q.IsURL { //если ссылка - скачиваем
-				meme_name, link_to_mempedia, nil := image_caching.Select_from_cash(q.Query)
-				//тут проверить ошибку и вызвать поисковик в случае неудачи
-				
-				//как найдётся - поискать в мемпедии по заголовкам ссылку на мемпедию
-				//вернуть в канал ответ
-				//и вставить в таблицу имя мема(встать в очередь на добавление)
+				meme_name, link_to_mempedia, err := image_caching.Select_from_cash(q.Query)
+				if err != nil { //тут проверить ошибку и
+					//вызвать поисковик в случае неудачи
+					//как найдётся - поискать в мемпедии по заголовкам ссылку на мемпедию
+					//вернуть в канал ответ
+					processedQueriesChan <- ProcessedQuery{q, entries}
+					//и вставить в таблицу имя мема(встать в очередь на добавление)
+					//В какой структуре возвращаются ответы? Как вставить?
+					//image_cashing.Insert_id(name, link string) error - для добавления найденных похожих ссылок
+					//image_cashing.Insert_to_cash(data []uint8, name, link string) error - для добавления по картинке
+				}else { //если нашлось - вернуть пользователю имя и ссылку
+					entries := []Entry{{meme_name, link_to_mempedia}}
+					//вернуть в канал ответ
+					processedQueriesChan <- ProcessedQuery{q, entries}
+				}
+
 			}else{ // если не ссылка - ищем в мемпедии по названию
 				mempedia_url, err := get_mempedia_url.Get_mempedia_url(q.Query)
 				if err != nil {
