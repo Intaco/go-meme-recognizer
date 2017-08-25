@@ -4,6 +4,8 @@ import (
 	"regexp" // - для проверки url ли прислали. Это проверяется тут?
 	"get_mempedia_url" //перемещено в src - иначе не видит
 	"image_caching"
+
+	"fmt"
 )
 //горутина, обрабатывающая приходящие запросы
 // Start for now implements echo instead of search
@@ -13,13 +15,14 @@ func Start(queriesChan <-chan Query, processedQueriesChan chan<- ProcessedQuery)
 		//зададим литеральную функцию - отдельную горутину обработчик
 		//передаём запрос
 		go func(q Query) {
+			print(q.Query, q.IsURL, q.ClientID)
 			if q.IsURL { //если ссылка - скачиваем
 				meme_name, link_to_mempedia, err := image_caching.Select_from_cash(q.Query)
 				if err != nil { //тут проверить ошибку и
 					//вызвать поисковик в случае неудачи
 					//как найдётся - поискать в мемпедии по заголовкам ссылку на мемпедию
 					//вернуть в канал ответ
-					processedQueriesChan <- ProcessedQuery{q, entries}
+					processedQueriesChan <- ProcessedQuery{q, []Entry{{"", ""}}}
 					//и вставить в таблицу имя мема(встать в очередь на добавление)
 					//В какой структуре возвращаются ответы? Как вставить?
 					//image_cashing.Insert_id(name, link string) error - для добавления найденных похожих ссылок
@@ -31,17 +34,18 @@ func Start(queriesChan <-chan Query, processedQueriesChan chan<- ProcessedQuery)
 				}
 
 			}else{ // если не ссылка - ищем в мемпедии по названию
-				mempedia_url, err := get_mempedia_url.Get_mempedia_url(q.Query)
+				meme_name, mempedia_url, err := get_mempedia_url.Get_mempedia_url(q.Query)
 				if err != nil {
+					fmt.Printf("Я в обработчике ошибок!")
 					entries := []Entry{{"Не знаю такого мема ☹. Перефразируйте.️", ""}} //QueryEscape escapes the string so it can be safely placed inside a URL query.
 					processedQueriesChan <- ProcessedQuery{q, entries}
 				}else {
-					entries := []Entry{{"Вот что мы нашли по этому мему", mempedia_url}} //QueryEscape escapes the string so it can be safely placed inside a URL query.
+					entries := []Entry{{"Вот что мы нашли по мему "+meme_name, mempedia_url}} //QueryEscape escapes the string so it can be safely placed inside a URL query.
+					fmt.Printf("%t", entries)
 					processedQueriesChan <- ProcessedQuery{q, entries}
 					//просто возвращаем пользователю ссылочку
 				}
 			}
-
 		}(q)//строка запроса должна быть неразделяемой, а канал возврата общим для всех обработчиков
 	}
 	close(processedQueriesChan)

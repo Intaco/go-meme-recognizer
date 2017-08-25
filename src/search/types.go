@@ -1,10 +1,10 @@
 package search
 
-import "github.com/abogovski/Go-TelegramBotAPI/tgbot"
+//import "github.com/abogovski/Go-TelegramBotAPI/tgbot"
 
 // Query search query
 type Query struct {
-	ClientID tgbot.Integer
+	ClientID int32 //tgbot.Integer1
 	Query    string
 	IsURL    bool // text otherwise
 }
