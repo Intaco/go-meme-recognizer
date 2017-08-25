@@ -7,6 +7,7 @@ import (
 	"./googlecse"
 	"./search"
 	"github.com/abogovski/Go-TelegramBotAPI/tgbot"
+	"image_caching"
 )
 
 const queriesChannelSize = 1024
@@ -15,6 +16,10 @@ const processedQueriesChannelSize = 1024
 var stop int32
 
 func main() {
+	//установим соединение с базой данных
+	image_caching.InitDb("database.db")
+	defer image_caching.ClouseDb()
+
 	queriesChan := make(chan search.Query, queriesChannelSize)
 	processedQueriesChan := make(chan search.ProcessedQuery, processedQueriesChannelSize)
 
