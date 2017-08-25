@@ -48,11 +48,20 @@ func InitDb(path string) error {
 	return err
 }
 
+func Insert_to_cash(link, name, mempedia_link string) error {
+	response, _ := http.Get(link)
+	defer response.Body.Close()
+	var img_as_bytes []byte
+	response.Body.Read(img_as_bytes)
+	err := Insert_to_cash_by_image(img_as_bytes, name, mempedia_link)
+	return err
+}
+
 //вставляет новую картинку в базу данных по хешу.
 //на каждое добавление создаётся новая транзакция
 //должно быть потокобезопасно, так как sqlite окружает rw mutex
-//чертовски медленно на запись - 6 вызовов/секунда
-func Insert_to_cash(data []uint8, name, link string) error {
+//медленно на запись - 6 вызовов/секунда
+func Insert_to_cash_by_image(data []uint8, name, link string) error {
 	mu.Lock()
 	defer mu.Unlock()
 	tx, err := db.Begin()
@@ -66,7 +75,7 @@ func Insert_to_cash(data []uint8, name, link string) error {
 	defer stmt.Close()
 	_, err = stmt.Exec(get_id(data), name, link)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	tx.Commit()
 	return nil
