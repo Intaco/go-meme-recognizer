@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"io/ioutil"
+	"../search"
 )
 
 var config CFG = loadCfg()
@@ -13,6 +14,7 @@ var config CFG = loadCfg()
 func GetConfig() CFG {
 	return config
 }
+
 type configSource struct {
 	CFG CFG `json:"GoogleCSE"`
 }
@@ -28,7 +30,7 @@ func loadCfg() CFG {
 	}
 	configuration := new(configSource)
 
-	err = json.Unmarshal(bytes,configuration)
+	err = json.Unmarshal(bytes, configuration)
 
 	if err != nil {
 		log.Fatalf("Failed to unmarshall json! Error: %s", err)
@@ -37,24 +39,45 @@ func loadCfg() CFG {
 	return configuration.CFG
 }
 
-
 type Answers struct {
 	Memes [] CSAMemeDesc `json:"items"`
 }
 type CSAMemeDesc struct {
 	Title string
-	Link string
+	Link  string
 }
+
 const GOOGLE_URL = "https://www.googleapis.com/customsearch/v1"
 
-func SearchSimilarByUrl(imageURL string) ([]CSAMemeDesc, error) {
+func GetSimilarMemes(q search.Query, processedQueriesChan chan<- search.ProcessedQuery) {
+	if q.IsURL {
+		memes, err := searchSimilarByUrl(q.Query)
+		if err != nil {
+			entries := []search.Entry{{"Упс, кажется, я не смог найти похожие мемы!", ""}}
+			processedQueriesChan <- search.ProcessedQuery{q, entries}
+		} else {
+			size := len(memes) + 1 // +1 for comment
+			entries := make([]search.Entry, size)
+			entries[0] = search.Entry{Title: "Вот какие похожие мемы я смог найти:"}
+			i := 1
+			for _, s := range memes {
+				entries[i].Title = s.Title
+				entries[i].URL = s.Link
+				i++
+			}
+			processedQueriesChan <- search.ProcessedQuery{q, entries}
+		}
+	}
+}
+
+func searchSimilarByUrl(imageURL string) ([]CSAMemeDesc, error) {
 	iu, err := url.Parse(imageURL)
 	if err != nil {
 		log.Fatalf("Failed to parse image url! Error: %s", err)
 		return nil, err
 	}
 	cfg := GetConfig()
-	u,err  := url.Parse(GOOGLE_URL)
+	u, err := url.Parse(GOOGLE_URL)
 	if err != nil {
 		log.Fatalf("Failed to parse CSE base url! Error: %s", err)
 		return nil, err
@@ -80,7 +103,6 @@ func SearchSimilarByUrl(imageURL string) ([]CSAMemeDesc, error) {
 	return parseResponseBody(body)
 }
 func parseResponseBody(body []byte) ([]CSAMemeDesc, error) {
-	println(string(body))
 	var answers = Answers{}
 	err := json.Unmarshal(body, &answers)
 	if err != nil {
@@ -89,4 +111,3 @@ func parseResponseBody(body []byte) ([]CSAMemeDesc, error) {
 	}
 	return answers.Memes, nil
 }
-

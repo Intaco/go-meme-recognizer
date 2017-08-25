@@ -3,8 +3,6 @@ package main
 import (
 	"log"
 	"os"
-
-	"./googlecse"
 	"./search"
 	"github.com/abogovski/Go-TelegramBotAPI/tgbot"
 	"image_caching"
@@ -43,8 +41,4 @@ func main() {
 	search.Start(queriesChan, processedQueriesChan)
 
 	return
-}
-func cseSample() {
-	url := "http://runt-of-the-web.com/wordpress/wp-content/uploads/2013/11/shibe-meme-wont-go.jpg"
-	googlecse.SearchSimilarByUrl(url)
 }
