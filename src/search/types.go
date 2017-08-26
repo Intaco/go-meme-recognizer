@@ -4,7 +4,7 @@ package search
 
 // Query search query
 type Query struct {
-	ClientID int32 //tgbot.Integer1
+	ClientID int64 //tgbot.Integer1
 	Query    string
 	IsURL    bool // text otherwise
 }
