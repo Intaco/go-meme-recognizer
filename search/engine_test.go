@@ -1,7 +1,7 @@
 package search
 
 import (
-	"image_caching"
+	"../image_caching"
 	"testing"
 	"fmt"
 )

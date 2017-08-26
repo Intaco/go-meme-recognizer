@@ -2,9 +2,8 @@ package search
 
 import (
 	"regexp" // - для проверки url ли прислали. Это проверяется тут?
-	"get_mempedia_url" //перемещено в src - иначе не видит
-	"image_caching"
-
+	"../get_mempedia_url"
+	"../image_caching"
 	"fmt"
 )
 //горутина, обрабатывающая приходящие запросы
@@ -14,7 +13,7 @@ func Start(queriesChan <-chan Query, processedQueriesChan chan<- ProcessedQuery)
 	for q := range queriesChan { //берём запрос(блокирующе) пока канал не закрыт
 		//зададим литеральную функцию - отдельную горутину обработчик
 		//передаём запрос
-		go func(q Query) {
+		//go func(q Query) {
 			print(q.Query, q.IsURL, q.ClientID)
 			if q.IsURL { //если ссылка - скачиваем
 				meme_name, link_to_mempedia, err := image_caching.Select_from_cash(q.Query)
@@ -46,7 +45,7 @@ func Start(queriesChan <-chan Query, processedQueriesChan chan<- ProcessedQuery)
 					//просто возвращаем пользователю ссылочку
 				}
 			}
-		}(q)//строка запроса должна быть неразделяемой, а канал возврата общим для всех обработчиков
+		//}(q)//строка запроса должна быть неразделяемой, а канал возврата общим для всех обработчиков
 	}
 	close(processedQueriesChan)
 }
