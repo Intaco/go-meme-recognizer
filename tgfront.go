@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
-
-	"./search"
+	"./src/search"
 	"github.com/abogovski/Go-TelegramBotAPI/tgbot"
 )
 
@@ -27,8 +26,8 @@ func PollTgBotQueries(botAPIURL string, offset tgbot.Integer, output chan<- sear
 	go func(output chan<- search.Query, input <-chan tgbot.Update) {
 		for update := range input {
 			if update.Message != nil && update.Message.Text != nil {
-				isURL := len(update.Message.Entities) == 1 && update.Message.Entities[0].URL != nil
-				output <- search.Query{update.Message.Chat.ID, *update.Message.Text, isURL}
+				isURL := len(update.Message.Entities) == 1 && search.Is_link(*update.Message.Text)
+				output <- search.Query{int64(update.Message.Chat.ID), *update.Message.Text, isURL}
 			} else {
 				log.Printf("Skipping update that is not a text message: %v\n", update)
 			}

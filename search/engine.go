@@ -21,7 +21,7 @@ func Start(queriesChan <-chan Query, processedQueriesChan chan<- ProcessedQuery)
 					//вызвать поисковик в случае неудачи
 					//как найдётся - поискать в мемпедии по заголовкам ссылку на мемпедию
 					//вернуть в канал ответ
-					processedQueriesChan <- ProcessedQuery{q, []Entry{{"", ""}}}
+					go GetSimilarMemes(q, processedQueriesChan)
 					//и вставить в таблицу имя мема(встать в очередь на добавление)
 					//В какой структуре возвращаются ответы? Как вставить?
 					//image_cashing.Insert_id(name, link string) error - для добавления найденных похожих ссылок
@@ -50,7 +50,7 @@ func Start(queriesChan <-chan Query, processedQueriesChan chan<- ProcessedQuery)
 	close(processedQueriesChan)
 }
 
-func is_link(may_be_url string) bool {
+func Is_link(may_be_url string) bool {
 	checking, _ := regexp.Compile(`https?://.*\.(jpe?g|gif|png)`)
 	link := checking.FindString(may_be_url)
 	if link == ""{
